@@ -4,7 +4,7 @@ param clusterRg string
 param prefix string
 param client_secret string
 param object_id string
-param NetworkContributor string = "4d97b98b-1d4f-4787-a291-c67834d212e7"
+param NetworkContributor string = '4d97b98b-1d4f-4787-a291-c67834d212e7'
 
 
 /*
