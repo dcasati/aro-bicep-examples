@@ -4,6 +4,7 @@ param clusterRg string
 param prefix string
 param client_secret string
 param object_id string
+param NetworkContributor string = "4d97b98b-1d4f-4787-a291-c67834d212e7"
 
 
 /*
@@ -48,7 +49,6 @@ param workerSubnet object = {
    }
  }
 
-var NetworkContributor = '4d97b98b-1d4f-4787-a291-c67834d212e7'
 resource aroNetworkContributor 'Microsoft.Authorization/roleAssignments@2020-08-01-preview' = {
   name: guid(vnet.id, 'NetworkContributor')
   scope: vnet
