@@ -1,14 +1,7 @@
 #!/usr/bin/env bash
 set -Ee -o pipefail
 
-################################################################################
-RG_NAME=rg-gbb-aro
-RG_LOCATION=westus2
-RG_CLUSTER_NAME=rg-gbb-aro-cluster
-BICEP_FILE=deploy.bicep
-PREFIX=gbb
-ARM_DEPLOYMENT_NAME=deployment-gbb-aro
-################################################################################
+source deploy.rc 
 
 __usage="
     -f  filename for the payload
@@ -31,11 +24,11 @@ cmd() {
 
 rg_create() {
   az group create --name $RG_NAME --location $RG_LOCATION
-  az group create --name $RG_CLUSTER_NAME --location $RG_LOCATION
+  #az group create --name $RG_CLUSTER_NAME --location $RG_LOCATION
 }
 
 sp_create() {
-  az ad sp create-for-rbac --name "sp-$RG_NAME" --role Contributor > sp.env
+  az ad sp create-for-rbac --name "sp-$RG_NAME-${RANDOM}" --role Contributor > sp.env
 }
 
 sp_load() {
@@ -54,10 +47,9 @@ aro_deploy() {
     --resource-group $RG_NAME \
     --template-file $BICEP_FILE \
     --parameters prefix=$PREFIX  \
-    --parameters clusterRg=$RG_CLUSTER_NAME \
-    --parameters client_id=$SP_CLIENT_ID \
     --parameters client_secret=$SP_CLIENT_SECRET \
-    --parameters object_id=$SP_OBJECT_ID 
+    --parameters object_id=$SP_OBJECT_ID \
+    --parameters domain=$DOMAIN 
 
 }
 
@@ -111,3 +103,4 @@ if [[ "${exec_flag}" == "true" ]]; then
 fi
 
 exit 0
+

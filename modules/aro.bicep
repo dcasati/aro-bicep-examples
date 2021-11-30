@@ -1,13 +1,22 @@
 param name string
-param masterSubnetId string
-param workerSubnetId string
 param objectId string
 param clientSecret string
 param podCidr string
 param serviceCidr string
-param clusterRg string
 
-resource aro 'Microsoft.RedHatOpenShift/openShiftClusters@2021-09-01-preview' = {
+/* Master Nodes */
+param masterVmSize string  
+param masterSubnetId string
+
+/* Worker Nodes */
+param workerVmSize string  
+param workerDiskSizeGb int  
+param workerCount int  
+param workerSubnetId string
+param domain string
+
+
+resource aro 'Microsoft.RedHatOpenShift/openShiftClusters@2020-04-30' = {
   name: name
   location: resourceGroup().location
   tags: {
@@ -19,10 +28,10 @@ resource aro 'Microsoft.RedHatOpenShift/openShiftClusters@2021-09-01-preview' = 
       visibility: 'Public'
     }
     clusterProfile: {
-      domain: 'dcasati.net'
-      //pullSecret: 'string'
-      resourceGroupId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${clusterRg}' 
+      domain: domain
+      resourceGroupId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/aro-${domain}'
       //version: 'string'
+      //pullSecret:
     }
     ingressProfiles: [
       {
@@ -32,13 +41,13 @@ resource aro 'Microsoft.RedHatOpenShift/openShiftClusters@2021-09-01-preview' = 
     ]
     masterProfile: {
       subnetId: masterSubnetId
-      vmSize: 'Standard_D8s_v3'
-      encryptionAtHost: 'Enabled'
+      vmSize: masterVmSize
+      //encryptionAtHost: 'Enabled'
     }
     networkProfile: {
       podCidr: podCidr
       serviceCidr: serviceCidr
-      softwareDefinedNetwork: 'OpenShiftSDN'
+     // softwareDefinedNetwork: 'OpenShiftSDN'
     }
     servicePrincipalProfile: {
       clientId: objectId
@@ -46,15 +55,16 @@ resource aro 'Microsoft.RedHatOpenShift/openShiftClusters@2021-09-01-preview' = 
     }
     workerProfiles: [
       {
-        count: 3
-        diskSizeGB: 128
+        count: workerCount
+        diskSizeGB: workerDiskSizeGb
         name: 'worker'
         subnetId: workerSubnetId
-        vmSize: 'Standard_D8s_v3'
-        encryptionAtHost: 'Enabled'
+        vmSize: workerVmSize
+        //encryptionAtHost: 'Enabled'
       }
     ]
   }
 }
 
 output name string = aro.name
+
