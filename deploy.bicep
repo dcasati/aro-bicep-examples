@@ -1,168 +1,186 @@
-/* General Parameters */
-param prefix string
-var name = '${prefix}-gbb'
+@description('Location')
+param location string = 'eastus'
 
-/* 
- * OpenShift Parameters 
- */
-param client_secret string
-param object_id string
-param domain string
+@description('Domain Prefix')
+param domain string = ''
 
-/* Master Nodes */
+@description('Pull secret from cloud.redhat.com. The json should be input as a string')
+param pullSecret string
+
+@description('Name of ARO vNet')
+param clusterVnetName string = 'aro-vnet'
+
+@description('ARO vNet Address Space')
+param clusterVnetCidr string = '10.100.0.0/15'
+
+@description('Worker node subnet address space')
+param workerSubnetCidr string = '10.100.70.0/23'
+
+@description('Master node subnet address space')
+param masterSubnetCidr string = '10.100.76.0/24'
+
+@description('Master Node VM Type')
 param masterVmSize string = 'Standard_D8s_v3'
 
-/* Worker Nodes */
+@description('Worker Node VM Type')
 param workerVmSize string = 'Standard_D4s_v3'
-param workerDiskSizeGb int = 128
+
+@description('Worker Node Disk Size in GB')
+@minValue(128)
+param workerVmDiskSize int = 128
+
+@description('Number of Worker Nodes')
+@minValue(3)
 param workerCount int = 3
 
-/*
- * Network Settings
- */
-param vnetPrefix string = '10.100.0.0/15'
-param podCidr string = '10.0.128.0/14'
+@description('Cidr for Pods')
+param podCidr string = '10.128.0.0/14'
+
+@metadata({
+  decription: 'Cidr of service'
+})
 param serviceCidr string = '172.30.0.0/16'
 
-param masterSubnet object = { 
-  name: 'master-subnet'
+@description('Unique name for the cluster')
+param clusterName string
+
+@description('Tags for resources')
+param tags object = {
+  env: 'Dev'
+  dept: 'Ops'
+}
+
+@description('Api Server Visibility')
+@allowed([
+  'Private'
+  'Public'
+])
+param apiServerVisibility string = 'Public'
+
+@description('Ingress Visibility')
+@allowed([
+  'Private'
+  'Public'
+])
+param ingressVisibility string = 'Public'
+
+@description('The Application ID of an Azure Active Directory client application')
+param aadClientId string
+
+@description('The Object ID of an Azure Active Directory client application')
+param aadObjectId string
+
+@description('The secret of an Azure Active Directory client application')
+@secure()
+param aadClientSecret string
+
+@description('The ObjectID of the Resource Provider Service Principal')
+param rpObjectId string
+
+var contribRole = '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c'
+
+resource clusterVnetName_resource 'Microsoft.Network/virtualNetworks@2020-05-01' = {
+  name: clusterVnetName
+  location: location
+  tags: tags
   properties: {
-    addressPrefix: '10.100.76.0/24'
-    privateLinkServiceNetworkPolicies: 'Disabled'
-    serviceEndpoints: [
+    addressSpace: {
+      addressPrefixes: [
+        clusterVnetCidr
+      ]
+    }
+    subnets: [
       {
-        service: 'Microsoft.ContainerRegistry'
+        name: 'master'
+        properties: {
+          addressPrefix: masterSubnetCidr
+          serviceEndpoints: [
+            {
+              service: 'Microsoft.ContainerRegistry'
+            }
+          ]
+          privateLinkServiceNetworkPolicies: 'Disabled'
+        }
+      }
+      {
+        name: 'worker'
+        properties: {
+          addressPrefix: workerSubnetCidr
+          serviceEndpoints: [
+            {
+              service: 'Microsoft.ContainerRegistry'
+            }
+          ]
+        }
       }
     ]
   }
 }
 
-param workerSubnet object = {
-  name: 'worker-subnet'
+resource clusterVnetName_Microsoft_Authorization_id_name_aadObjectId 'Microsoft.Network/virtualNetworks/providers/roleAssignments@2018-09-01-preview' = {
+  name: '${clusterVnetName}/Microsoft.Authorization/${guid(resourceGroup().id, deployment().name, aadObjectId)}'
   properties: {
-    addressPrefix: '10.100.70.0/23'
-    serviceEndpoints: [
+    roleDefinitionId: contribRole
+    principalId: aadObjectId
+  }
+  dependsOn: [
+    clusterVnetName_resource
+  ]
+}
+
+resource clusterVnetName_Microsoft_Authorization_id_name_rpObjectId 'Microsoft.Network/virtualNetworks/providers/roleAssignments@2018-09-01-preview' = {
+  name: '${clusterVnetName}/Microsoft.Authorization/${guid(resourceGroup().id, deployment().name, rpObjectId)}'
+  properties: {
+    roleDefinitionId: contribRole
+    principalId: rpObjectId
+  }
+  dependsOn: [
+    clusterVnetName_resource
+  ]
+}
+
+resource clusterName_resource 'Microsoft.RedHatOpenShift/OpenShiftClusters@2020-04-30' = {
+  name: clusterName
+  location: location
+  tags: tags
+  properties: {
+    clusterProfile: {
+      domain: domain
+      resourceGroupId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/aro-${domain}-${location}'
+      pullSecret: pullSecret
+    }
+    networkProfile: {
+      podCidr: podCidr
+      serviceCidr: serviceCidr
+    }
+    servicePrincipalProfile: {
+      clientId: aadClientId
+      clientSecret: aadClientSecret
+    }
+    masterProfile: {
+      vmSize: masterVmSize
+      subnetId: resourceId('Microsoft.Network/virtualNetworks/subnets', clusterVnetName, 'master')
+    }
+    workerProfiles: [
       {
-        service: 'Microsoft.ContainerRegistry'
+        name: 'worker'
+        vmSize: workerVmSize
+        diskSizeGB: workerVmDiskSize
+        subnetId: resourceId('Microsoft.Network/virtualNetworks/subnets', clusterVnetName, 'worker')
+        count: workerCount
+      }
+    ]
+    apiserverProfile: {
+      visibility: apiServerVisibility
+    }
+    ingressProfiles: [
+      {
+        name: 'default'
+        visibility: ingressVisibility
       }
     ]
   }
-}
-
-resource vnet 'Microsoft.Network/virtualNetworks@2019-09-01' = {
-   name: 'aro-vnet'
-   location: resourceGroup().location
-   properties: {
-      addressSpace: {
-       addressPrefixes: [
-         vnetPrefix
-       ]
-     }
-     subnets: [
-      masterSubnet
-      workerSubnet
-     ]
-   }
- }
-
- /* User supplied Service Principal */
-var NetworkContributorRole = '4d97b98b-1d4f-4787-a291-c67834d212e7'
-var ContributorRole = 'b24988ac-6180-42a0-ab88-20f7382dd24c'
-resource aroNetworkContributor 'Microsoft.Authorization/roleAssignments@2018-09-01-preview' = {
-  name: guid(vnet.id, 'NetworkContributor')
-  scope: vnet
   dependsOn: [
-    vnet
+    clusterVnetName_resource
   ]
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', NetworkContributorRole)
-    principalId: object_id
-    principalType: 'ServicePrincipal'
-
-  }
 }
-
-/* Contributor to the vNet Resource Group*/
-resource aroContributor 'Microsoft.Authorization/roleAssignments@2018-09-01-preview' = {
-  name: guid(vnet.id, 'Contributor')
-  scope: vnet
-  dependsOn: [
-    vnet
-  ]
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', ContributorRole)
-    principalId: object_id
-    principalType: 'ServicePrincipal'
-
-  }
-}
-
-
-/* the ARO RP Service Principal*/
-
-/* Network Contributor to the vNet Resource Group*/
-var aroRpServicePrincipal = '50c17c64-bc11-4fdd-a339-0ecd396bf911'
-resource aroSPNetworkContributor 'Microsoft.Authorization/roleAssignments@2018-09-01-preview' = {
-  name: guid(vnet.id, 'NetworkContributor', 'AroSpVnetRg')
-  scope: vnet
-  dependsOn: [
-    vnet
-  ]
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', NetworkContributorRole)
-    principalId: aroRpServicePrincipal
-    principalType: 'ServicePrincipal'
-  }
-}
-
-/* Contributor to the vNet Resource Group*/
-resource aroSPContributor 'Microsoft.Authorization/roleAssignments@2020-08-01-preview' = {
-  name: guid(vnet.id, 'Contributor', 'AroSpVnetRg')
-  scope: vnet
-  dependsOn: [
-    vnet
-  ]
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', ContributorRole)
-    principalId: aroRpServicePrincipal
-    principalType: 'ServicePrincipal'
-  }
-}
-
-/*
- * Azure Red Hat OpenShift
- */
-module aro 'modules/aro.bicep' = {
-  name: 'aro-deployment'
-  dependsOn: [
-    vnet
-    aroContributor
-    aroContributor
-  ]
-  params: {
-    name: format('{0}-aro',name)
-    objectId: object_id
-    clientSecret: client_secret
-    domain: domain
-
-    /* Networking */
-    podCidr: podCidr
-    serviceCidr: serviceCidr
-    
-    /* Master */
-    masterVmSize: masterVmSize
-    masterSubnetId: '${vnet.id}/subnets/${masterSubnet.name}'
-
-    /* Worker */
-    workerCount: workerCount
-    workerDiskSizeGb: workerDiskSizeGb
-    workerVmSize: workerVmSize
-    workerSubnetId: '${vnet.id}/subnets/${workerSubnet.name}'
-  }
-}
-
-/*
- * Outputs
- */
-output aroClusterName string = aro.outputs.name
-

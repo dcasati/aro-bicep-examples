@@ -1,7 +1,6 @@
-RG_NAME=gbb-aro
+RG_NAME=dcasati-aro-bicep
 RG_LOCATION=eastus
-RG_CLUSTER_NAME=rg-gbb-aro-cluster
+ARO_CLUSTER_NAME=dc-aro
 BICEP_FILE=deploy.bicep
-PREFIX=dcasati
-ARM_DEPLOYMENT_NAME=deployment-gbb-aro
-
+PREFIX=dc
+DOMAIN=gbb
