@@ -110,5 +110,13 @@ To connect your new cluster please review the described steps on [Connect to an 
 
 Once you are done, run the following command to delete your resource group along with all the resources you created in this tutorial.
 
-```azurecli
+```bash
 az aro delete --resource-group $RESOURCEGROUP --name $ARO_CLUSTER_NAME
+```
+
+Optionally, you might also want to delete the service principal created by this example:
+
+```bash
+SP_ID=$(jq -r '.name' app-service-principal.json)
+az ad sp delete --id $SP_ID
+```
